@@ -1,0 +1,988 @@
+---
+- name: "HIGH | unix_92645 | The Apache web server must provide install options to exclude the installation of documentation, sample code, example applications, and tutorials"
+  block:
+      - name: "HIGH | unix_92645 | The Apache web server must provide install options to exclude the installation of documentation, sample code, example applications, and tutorials | List available sites"
+        command: ls /etc/apache2/sites-available
+        register: unix_92645_apache_sites
+        changed_when: false
+
+      - name: "HIGH | unix_92645 | The Apache web server must provide install options to exclude the installation of documentation, sample code, example applications, and tutorials | Display available sites"
+        debug:
+            msg:
+                - "Below is the list of available sites"
+                - "review your /etc/Apache2 folder with your ISSO for approval"
+                - "{{ unix_92645_apache_sites.stdout_lines }}"
+  when:
+      - unix_92645
+  tags:
+      - V-92645
+      - cat1
+      - high
+      - Ubuntu
+
+- name: "HIGH | unix_92673 | Apache web server application directories, libraries, and configuration files must only be accessible to privileged users."
+  debug:
+      msg:
+          - "Below is the list of users with their user levels"
+          - "Please review with your ISSO"
+          - "{{ passwd_audit }}"
+  when:
+      - unix_92673
+  tags:
+      - V-92673
+      - cat1
+      - high
+      - Ubuntu
+
+- name: HIGH | unix_92689 | The Apache web server must generate a session ID using as much of the character set as possible to reduce the risk of brute force. | Alert no httpd"
+  command: a2enmod unique_id
+  notify: restart apache2
+  when:
+      - unix_92689
+  tags:
+      - V-92689
+      - cat1
+      - high
+      - Ubuntu
+
+- name: "HIGH | unix_92751 | The account used to run the Apache web server must not have a valid login shell and password defined"
+  block:
+      - name: "HIGH | unix_92751 | The account used to run the Apache web server must not have a valid login shell and password defined | Find apache users"
+        shell: cat /etc/apache2/envvars | grep APACHE_RUN_USER | cut -f2 -d=
+        changed_when: false
+        register: apache_users
+
+      - name: "HIGH | unix_92751 | The account used to run the Apache web server must not have a valid login shell and password defined | Apply /sbin/nologin to apache users"
+        user:
+            name: "{{ item }}"
+            shell: /sbin/nologin
+        with_items:
+            - "{{ apache_users.stdout_lines }}"
+  when:
+      - unix_92751
+  tags:
+      - V-92751
+      - cat1
+      - high
+      - Ubuntu
+
+- name: "HIGH | unix_92755 | The Apache web server software must be a vendor-supported version"
+  block:
+      - name: "HIGH | unix_92755 | The Apache web server software must be a vendor-supported version | Get Apache version"
+        command: apachectl -v
+        register: apache_current_version
+        changed_when: false
+
+      - name: "HIGH | unix_92755 | The Apache web server software must be a vendor-supported version | Message out current Apache version"
+        debug:
+            msg:
+                - "Alert! The current version of Apache is below:"
+                - "{{ apache_current_version }}"
+
+      - name: "HIGH | unix_92755 | The Apache web server software must be a vendor-supported version | Update Apache"
+        yum:
+            name: apache2
+            state: latest
+        when: automate_package_upgrades
+  when:
+      - unix_92755
+  tags:
+      - V-92755
+      - cat1
+      - high
+      - Ubuntu
+
+# CAT II Tasks
+
+- name: "MEDIUM | unix_92597 | The Apache web server must limit the number of allowed simultaneous session requests"
+  block:
+      - name: "MEDIUM | unix_92597 | The Apache web server must limit the number of allowed simultaneous session requests | Set KeepAlive to on"
+        lineinfile:
+            path: /etc/apache2/apache2.conf
+            regexp: '^KeepAlive '
+            line: "KeepAlive On"
+            insertafter: EOF
+        notify: restart apache2
+
+      - name: "MEDIUM | unix_92597 | The Apache web server must limit the number of allowed simultaneous session requests | Set KeepAliveRequests to 100 or more"
+        lineinfile:
+            path: /etc/apache2/apache2.conf
+            regexp: ^MaxKeepAliveRequests
+            line: "MaxKeepAliveRequests {{ maxkeepaliverequests_count }}"
+            insertafter: EOF
+        notify: restart apache2
+  when:
+      - unix_92597
+  tags:
+      - V-92597
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92599 | The Apache web server must perform server-side session management"
+  command: a2enmod {{ item }}
+  register: apache_92599_mod_enabled
+  changed_when: "'Enabling' in apache_92599_mod_enabled.stdout"
+  with_items:
+      - usertrack
+      - session
+  when:
+      - unix_92599
+  tags:
+      - V-92599
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: |
+        "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions"
+        "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information"
+  block:
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Install SSL and socache_shmcb modules"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Install SSL and socache_shmcb modules"
+        command: 'a2enmod {{ item }}'
+        register: apache_92601_mod_enabled
+        changed_when: "'Enabling' in apache_92601_mod_enabled.stdout"
+        with_items:
+            - socache_shmcb
+            - ssl
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Set SSL Setting""
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information| Set SSL Setting"
+        lineinfile:
+            path: /etc/apache2/mods-enabled/ssl.conf
+            regexp: '(.*?)SSLProtocol.*'
+            line: '        SSLProtocol -ALL +TLSv1.2'
+            insertbefore: '</IfModule>'
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Get SSLCACertificateFile path"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Get SSLCACertificateFile path"
+        shell: cat /etc/apache2/sites-available/default-ssl.conf | grep -h "SSLCACertificateFile" | grep -v '#' | sed 's/^[ \t]*//;s/[ \t]*$//' | cut -f2 -d ' '
+        changed_when: false
+        failed_when: false
+        register: apache_92745_sslcacertifcatefile_path
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Set SSLCACertificateFile parameter"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Set SSLCACertificateFile parameter"
+        lineinfile:
+            path: /etc/apache2/sites-available/default-ssl.conf
+            regexp: '(.*?)SSLCACertificateFile.*'
+            line: '                SSLCACertificateFile {{ sslacertificatefile_settings.pathub }}/{{ sslacertificatefile_settings.file }}'
+            insertafter: '(.*?)</Directory>'
+        when: apache_92745_sslcacertifcatefile_path.stdout == ""
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Get SSLCACertificateFile path"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Get SSLCACertificateFile path"
+        shell: cat /etc/apache2/sites-available/default-ssl.conf | grep -h "SSLCACertificateFile" | grep -v '#' | sed 's/^[ \t]*//;s/[ \t]*$//' | cut -f2 -d ' '
+        changed_when: false
+        failed_when: false
+        register: apache_92745_sslcacertifcatefile_path
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Get CA cert list"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Get CA cert list"
+        command: cat {{ apache_92745_sslcacertifcatefile_path.stdout }}
+        changed_when: false
+        failed_when: false
+        register: apache_92745_ca_bundle_list
+        when: apache_92745_sslcacertifcatefile_path.stdout != ""
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | List CA cert list"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | List CA cert list"
+        debug:
+            msg:
+                - "Alert! Below are the list of CA's, please make sure they are DoD approved"
+                - "{{ apache_92745_ca_bundle_list.stdout_lines }}"
+        when: apache_92745_ca_bundle_list.stdout != ""
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Warn no CA cert list"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Warn no CA cert list"
+        debug:
+            msg:
+                - "Warning! You have no CA's, please remedy"
+        when: apache_92745_ca_bundle_list.stdout == ""
+  when:
+      - unix_92601
+      - unix_92745
+  tags:
+      - V-92601
+      - V-92745
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92607 | The Apache web server must have system logging enabled"
+  lineinfile:
+      path: /etc/apache2/envvars
+      regexp: '^export APACHE_LOG_DIR='
+      line: 'export APACHE_LOG_DIR={{ apache2_custom_log.path }}$SUFFIX'
+      insertafter: '# Only /var/log/apache2'
+  notify: restart apache2
+  when:
+      - unix_92607
+  tags:
+      - V-92607
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM |unix_92609 | The Apache web server must generate, at a minimum, log records for system startup and shutdown, system access, and system authentication events"
+  lineinfile:
+      path: /etc/apache2/apache2.conf
+      regexp: '# Use mod_remoteip instead'
+      line: 'LogFormat "%a %A %h %H %l %m %s %t %u %U \"%{Referer}i\" " common'
+      insertafter: '# Use mod_remoteip instead'
+  notify: restart apache2
+  when:
+      - unix_92609
+  tags:
+      - V-92609
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92621 | An Apache web server, behind a load balancer or proxy server, must produce log records containing the client IP information as the source and destination and not the load balancer or proxy IP information with each event"
+  block:
+      - name: "MEDIUM | unix_92621 | An Apache web server, behind a load balancer or proxy server, must produce log records containing the client IP information as the source and destination and not the load balancer or proxy IP information with each event | Get source IP settings"
+        shell: cat /etc/apache2/apache2.conf | grep LogFormat
+        changed_when: false
+        register: source_ip_settings
+
+      - name: "MEDIUM | unix_92621 | An Apache web server, behind a load balancer or proxy server, must produce log records containing the client IP information as the source and destination and not the load balancer or proxy IP information with each event | Display source IP settings"
+        debug:
+            msg:
+                - "Alert! Below are the current source log settings:"
+                - "{{ source_ip_settings.stdout_lines }}"
+  when:
+      - unix_92621
+  tags:
+      - V-92621
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92627 | The Apache web server must use a logging mechanism that is configured to alert the Information System Security Officer (ISSO) and System Administrator (SA) in the event of a processing failure"
+  debug:
+      msg: "Alert! Please work with SIEMA Administrator to configure an alert when no audit data is received from Apache based on defined schedule of connections"
+  when:
+      - unix_92627
+  tags:
+      -V-92627
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users"
+  block:
+      - name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users |Register apache2 log paths"
+        shell: cat /etc/apache2/envvars | grep APACHE_LOG_DIR | cut -f2 -d= | cut -f1 -d$
+        changed_when: false
+        register: apache2_log_path
+
+      - name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users | Check for log files"
+        stat:
+            path: '/etc/apache2/{{ apache2_log_path.stdout }}'
+        register: apache_92629_log_path_exist
+
+      - name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users | Create if folder exists"
+        file:
+            path: '/etc/apache2/{{ apache2_log_path.stdout }}'
+            state: directory
+        when: apache_92629_log_path_exist.stat.exists == false
+
+      - name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users | Restart apache2 to create default log files"
+        service:
+            name: apache2
+            state: restarted
+        when: apache_92629_log_path_exist.stat.exists == false
+
+      - name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users | Get list of log files"
+        command: 'ls /etc/apache2/{{ apache2_log_path.stdout }}'
+        changed_when: false
+        register: apache_92629_log_files
+
+      - name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users | Set permissions on log files"
+        file:
+            path: '/etc/apache2/{{ apache2_log_path.stdout }}/{{ item }}'
+            owner: "{{ logs_owner.user }}"
+            group: "{{ logs_owner.group }}"
+            mode: "{{ logs_owner.perms }}"
+        with_items:
+            - "{{ apache_92629_log_files.stdout_lines }}"
+        when: log_files.stdout is defined
+  when:
+      - unix_92629
+  tags:
+      - V-92629
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92631 | The log information from the Apache web server must be protected from unauthorized modification or deletion"
+  block:
+      - name: "MEDIUM | unix_92631 | The log information from the Apache web server must be protected from unauthorized modification or deletion | Find log files"
+        shell: cat /etc/apache2/apache2.conf | grep 'ErrorLog ${' | cut -f2 -d}
+        changed_when: false
+        register: apache_92631_log_files
+
+      - name: "MEDIUM | unix_92631 | The log information from the Apache web server must be protected from unauthorized modification or deletion | Set permissions"
+        file:
+            path: '/etc/apache2/{{ apache2_log_path.stdout }}{{ item }}'
+            owner: "{{ logs_owner.user }}"
+            mode: "{{ logs_owner.perms }}"
+        with_items:
+            - "{{ apache_92631_log_files.stdout_lines }}"
+  when:
+      - unix_92631
+  tags:
+      - V-92631
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92635 | The log data and records from the Apache web server must be backed up onto a different system or media"
+  debug:
+      msg:
+          - "Alert! Please interview the Information System Security Officer, System Administrator, Web Manager, Webmaster, or developers as necessary"
+          - "to determine whether a tested and verifiable backup strategy has been implemented for web server software and all web server data files."
+  when:
+      - unix_92635
+  tags:
+      - V-92635
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92637 | Expansion modules must be fully reviewed, tested, and signed before they can exist on a production Apache web server"
+  block:
+      - name: "MEDIUM | unix_92637 | Expansion modules must be fully reviewed, tested, and signed before they can exist on a production Apache web server | Get list of loaded modules"
+        command: apachectl -M
+        register: apache_92637_loaded_modules
+
+      - name: "MEDIUM | unix_92637 | Expansion modules must be fully reviewed, tested, and signed before they can exist on a production Apache web server | Get list of assigned modules"
+        debug:
+            msg:
+                - "Alert! Below is the list of loaded modules. Please review and remove any unsigned modules"
+                - "{{ apache_92637_loaded_modules.stdout_lines }}"
+  when:
+      - unix_92637
+  tags:
+      - V-92637
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92639 | The Apache web server must not perform user management for hosted applications"
+  replace:
+      path: /etc/apache2/apache2.conf
+      regexp: '(.*?)AuthUserFile'
+      replace: '# AuthUserFile'
+  notify: restart apache2
+  when:
+      - unix_92639
+  tags:
+      - V-92639
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92641 | The Apache web server must only contain services and functions necessary for operation"
+  block:
+      - name: Register Apache2 document directory
+        shell: "grep -R DocumentRoot /etc/apache2/sites-enabled/ | cut -f2 -d : | cut -f2 -d ' '"
+        changed_when: false
+        register: apache2_doc_dir
+
+      - name: "The Apache web server must only contain services and functions necessary for operation | Remove index.html from documents root directory"
+        file:
+            path: "{{ apache2_doc_dir.stdout }}/index.html"
+            state: absent
+
+      - name: "MEDIUM | unix_92641 | The Apache web server must only contain services and functions necessary for operation | Verify Manual content is removed"
+        apt:
+            name: apache2-doc
+            state: absent
+
+      - name: "MEDIUM | unix_92641 | The Apache web server must only contain services and functions necessary for operation | Alert on Server Status handler and Server Information handler"
+        debug:
+            msg:
+                - "Alert! Please review the configuration files and remove/comment out to disable Server Status handler"
+                - "Alert! Please review the configuration files and remove/comment out to disable Server Infomration handler"
+                - "Alert! Please review the configuration files and remove/comment out to disable any other hanlders such as perl-status"
+  when:
+      - unix_92641
+  tags:
+      - V-92641
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92643 | The Apache web server must not be a proxy server"
+  command: a2dismod "{{ item }}"
+  register: apache_92643_mod_disabled
+  changed_when: "'Already' not in apache_92643_mod_disabled.stdout"
+  with_items:
+      - proxy
+      - proxy_ajp
+      - proxy_balancer
+      - proxy_ftp
+      - proxy_http
+      - proxy_connect
+  when:
+      - unix_92643
+  tags:
+      - V-92643
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92645 | The Apache web server must provide install options to exclude the installation of documentation, sample code, example applications, and tutorials"
+  debug:
+      msg:
+          - "Alert! Please review and remove any unnecessary applications per ISSO documentation"
+  when:
+      - unix_92645
+  tags:
+      - V-92645
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92653 | The Apache web server must have resource mappings set to disable the serving of certain file types"
+  block:
+      - name: "MEDIUM | unix_92653 | The Apache web server must have resource mappings set to disable the serving of certain file types | Remove AddHandler settings"
+        lineinfile:
+            path: /etc/apache2/sites-available/000-default.conf
+            regexp: '(.*?)AddHandler cgi-script {{ item }}'
+            state: absent
+        with_items:
+            - .exe
+            - .dll
+            - .com
+            - .bat
+            - .csh
+
+      - name: "MEDIUM | unix_92653 | The Apache web server must have resource mappings set to disable the serving of certain file types | Remove Action settings"
+        lineinfile:
+            path: /etc/apache2/sites-available/000-default.conf
+            regexp: '(.*?)Action {{ item }}.*'
+            state: absent
+        with_items:
+            - .exe
+            - .dll
+            - .com
+            - .bat
+            - .csh
+  when:
+      - unix_92653
+  tags:
+      - V-92653
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92655 | The Apache web server must allow the mappings to unused and vulnerable scripts to be removed"
+  block:
+      - name: "MEDIUM | unix_92655 | The Apache web server must allow the mappings to unused and vulnerable scripts to be removed | Get Script, ScriptAlias, ScriptAliasMatch, and ScriptInterpreterSource settings"
+        shell: cat /etc/apache2/sites-available/000-default.conf | grep -i "Script" | grep '^[[:blank:]]*[^[:blank:]#;]' | sed -e 's/^[ \t]*//'
+        changed_when: false
+        register: apache_92655_script_settings
+
+      - name: "MEDIUM | unix_92655 | The Apache web server must allow the mappings to unused and vulnerable scripts to be removed | Alert on script settings"
+        debug:
+            msg:
+                - "Alert! Below are the script settings in place. Please review with ISSO"
+                - "and remove any that are not needed"
+                - "{{ apache_92655_script_settings.stdout_lines }}"
+  when:
+      - unix_92655
+  tags:
+      - V-92655
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92659 | The Apache web server must have Web Distributed Authoring (WebDAV) disabled"
+  command: a2dismod "{{ item }}"
+  register: apache_92659_mod_disabled
+  # failed_when: false
+  with_items:
+      - dav_fs
+      - dav_lock
+      - dav
+  when:
+      - unix_92659
+  tags:
+      - V-92659
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92661 | The Apache web server must be configured to use a specified IP address and port"
+  replace:
+      path: /etc/apache2/ports.conf
+      regexp: '^Listen(.*?).*'
+      replace: 'Listen {{ listen_config.ip }}:{{ listen_config.port }}'
+  notify: restart apache2
+  when:
+      - unix_92661
+  tags:
+      - V-92661
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92671 | Apache web server accounts accessing the directory tree, the shell, or other operating system functions and utilities must only be administrative accounts"
+  debug:
+      msg:
+          - "Warning! This is an OS level control and should be handled in an OS Role"
+  when:
+      - unix_92671
+  tags:
+      - V-92671
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92675 | The Apache web server must separate the hosted applications from hosted Apache web server management functionality"
+  command: /bin/true
+  changed_when: false
+  when:
+      - unix_92675
+  tags:
+      - V-92675
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92677 | The Apache web server must invalidate session identifiers upon hosted application user logout or other session termination"
+  command: /bin/true
+  changed_when: false
+  when:
+      - unix_92677
+  tags:
+      - V-92677
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application"
+  block:
+      - name: "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Enable Headers module"
+        command: a2enmod headers
+        register: apache_92679_header_module
+        changed_when: "'Enabling' in apache_92679_header_module.stdout"
+        notify: restart apache2
+
+      - name: "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Register no HttpOnly and secure"
+        shell: cat /etc/apache2/apache2.conf | grep -i "set-cookie" | grep -ivE 'httponly|secure' | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        register: apache_92679_no_httponly_secure
+
+      - name: "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Register only HttpOnly"
+        shell: cat /etc/apache2/apache2.conf | grep -i "set-cookie" | grep -i 'httponly' | grep -v 'secure' | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        register: apache_92679_no_secure_only
+        when: apache_92679_no_httponly_secure.stdout == ""
+
+      - name: "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Register only secure"
+        shell: cat /etc/apache2/apache2.conf | grep -i "set-cookie" | grep -i 'secure' | grep -iv 'httponly' | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        register: apache_92679_no_httponly_only
+        when: apache_92679_no_httponly_secure.stdout == ""
+
+      - name: "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Add both HttpOnly and secure"
+        lineinfile:
+            path: /etc/apache2/apache2.conf
+            regexp: '(.*?)Header edit Set-Cookie.*'
+            line: '        {{ apache_92679_no_httponly_secure.stdout }};HttpOnly;secure'
+        when: apache_92679_no_httponly_secure.stdout != ""
+        notify: restart apache2
+
+      - name: "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Add both HttpOnly and secure"
+        lineinfile:
+            path: /etc/apache2/apache2.conf
+            regexp: '(.*?)Header edit Set-Cookie.*'
+            line: '        {{ apache_92679_no_secure_only.stdout }};secure'
+        when:
+            - apache_92679_no_httponly_secure.stdout == ""
+            - apache_92679_no_secure_only.stdout != ""
+        notify: restart apache2
+
+      - name: "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Add both HttpOnly and secure"
+        lineinfile:
+            path: /etc/apache2/apache2.conf
+            regexp: '(.*?)Header edit Set-Cookie.*'
+            line: '        {{ apache_92679_no_httponly_only.stdout }};HttpOnly'
+        when:
+            - apache_92679_no_httponly_secure.stdout == ""
+            - apache_92679_no_httponly_only.stdout != ""
+        notify: restart apache2
+
+      - name: "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Add line if doesn't exist"
+        lineinfile:
+            path: /etc/apache2/apache2.conf
+            regexp: '(.*?)Header edit Set-Cookie.*'
+            line: Header edit Set-Cookie {{ apache_92679_cookie_path }};HttpOnly;Secure
+  when:
+      - unix_92679
+  tags:
+      - V-92679
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92687 | The Apache web server must generate a session ID long enough that it cannot be guessed through brute force"
+  block:
+      - name: "MEDIUM | unix_92687 | The Apache web server must generate a session ID long enough that it cannot be guessed through brute force | Find no aes256 cipher"
+        shell: cat /etc/apache2/mods-enabled/ssl.conf | grep -i "SSLCipherSuite" | grep -iv "aes256" | grep -v "#" | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        failed_when: false
+        register: apache_92687_no_aes256
+
+      - name: "MEDIUM | unix_92687 | The Apache web server must generate a session ID long enough that it cannot be guessed through brute force | Set aes256"
+        lineinfile:
+            path: /etc/apache2/mods-enabled/ssl.conf
+            regexp: (.*?){{ apache_92687_no_aes256.stdout }}
+            line: '        {{ apache_92687_no_aes256.stdout }}:aes256'
+            insertbefore: '</IfModule>'
+        when: apache_92687_no_aes256.stdout != ""
+  when:
+      - unix_92687
+  tags:
+      - V-92687
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92695 | The Apache web server must be built to fail to a known safe state if system initialization fails, shutdown fails, or aborts fail"
+  debug:
+      msg:
+          - "Alert! Please work with your System Administrator to create a disaster recovery plan"
+          - "Ask for documentation on the disaster recovery methods tested and planned for the Apache 2.4 web server in the event of the necessity for rollback."
+  when:
+      - unix_92695
+  tags:
+      - V-92695
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92697 | The Apache web server must be tuned to handle the operational requirements of the hosted application"
+  lineinfile:
+      path: /etc/apache2/apache2.conf
+      regexp: '^Timeout '
+      line: 'Timeout 10'
+      insertafter: '# Timeout: '
+  when:
+      - unix_92697
+  tags:
+      - V-92697
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92699 | Warning and error messages displayed to clients must be modified to minimize the identity of the Apache web server, patches, loaded modules, and directory paths"
+  lineinfile:
+      path: /etc/apache2/sites-enabled/000-default.conf
+      line: '        {{ item }}'
+      insertafter: '(.*?)CustomLog '
+  with_items:
+      - "{{ custom_error_messages }}"
+  notify: restart apache2
+  when:
+      - unix_92699
+  tags:
+      - V-92699
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92701 | Debugging and trace information used to diagnose the Apache web server must be disabled"
+  block:
+      - name: "MEDIUM | unix_92701 | Debugging and trace information used to diagnose the Apache web server must be disabled | Set LogLevel"
+        lineinfile:
+            path: /etc/apache2/apache2.conf
+            regexp: '^LogLevel(.*?).*'
+            line: 'LogLevel info'
+            insertbefore: ^# Include module configuration
+        notify: restart apache2
+
+      - name: "MEDIUM | unix_92701 | Debugging and trace information used to diagnose the Apache web server must be disabled | Set TraceEnable"
+        lineinfile:
+            path: /etc/apache2/apache2.conf
+            regexp: '^TraceEnable(.*?).*'
+            line: 'TraceEnable Off'
+            insertafter: '^LogLevel '
+        notify: restart apache2
+  when:
+      - unix_92701
+  tags:
+      - V-92701
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92705 | The Apache web server must set an inactive timeout for sessions"
+  block:
+      - name: "MEDIUM | unix_92705 | The Apache web server must set an inactive timeout for sessions | Enable Reqtimeout module"
+        command: a2enmod reqtimeout
+        register: apache_92705_reqtimeout_module
+        changed_when: "'Enabling' in apache_92705_reqtimeout_module.stdout"
+
+      - name: "MEDIUM | unix_92705 | The Apache web server must set an inactive timeout for sessions | Set RequestReadTimeout setting"
+        lineinfile:
+            path: /etc/apache2/mods-enabled/reqtimeout.conf
+            regexp: '(.*?)RequestReadTimeout body'
+            line: '        RequestReadTimeout {{ requestreadtimeout_values.apache2 }}'
+            insertbefore: '^</IfModule>'
+  when:
+      - unix_92705
+  tags:
+      - V-92705
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92709 | The Apache web server must restrict inbound connections from nonsecure zones"
+  command: /bin/true
+  changed_when: false
+  when:
+      - unix_92709
+  tags:
+      - V-92709
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92711 | The Apache web server must be configured to immediately disconnect or disable remote access to the hosted applications"
+  command: /bin/true
+  changed_when: false
+  when:
+      - unix_92711
+  tags:
+      - V-92711
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92713 | Non-privileged accounts on the hosting system must only access Apache web server security-relevant information and functions through a distinct administrative account"
+  debug:
+      msg:
+          - "Alert! Determine tool or control file is used to control the configuration of the web server"
+          - "If the control of the web server is done via control files, Verify who has update access to them."
+          - "If tools are being used to configure the web server, determine who has access to those tools."
+  when:
+      - unix_92713
+  tags:
+      - V-92713
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92715 | The Apache web server must use a logging mechanism that is configured to allocate log record storage capacity large enough to accommodate the logging requirements of the Apache web server"
+  debug:
+      msg:
+          - "Alert! Please work with SIEM administrative to determine the SIEM is configured to allocate log record storage capacity"
+          - "large enough to accommodate logging requirements of the Apache server."
+  when:
+      - unix_92715
+  tags:
+      - V-92715
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92717 | The Apache web server must not impede the ability to write specified log record content to an audit log server"
+  debug:
+      msg:
+          - "Alert! Work with the SIEM administrator to allow the ability to write specified log record content to an audit log server."
+  when:
+      - unix_92717
+  tags:
+      - V-92717
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92719 | The Apache web server must be configured to integrate with an organizations security infrastructure"
+  debug:
+      msg:
+          - "Alert! Work with the SIEM administrator to integrate with an organizations security infrastructure."
+  when:
+      - unix_92719
+  tags:
+      - V-92719
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92723 | The Apache web server must generate log records that can be mapped to Coordinated Universal Time (UTC) or Greenwich Mean Time (GMT) which are stamped at a minimum granularity of one second"
+  command: /bin/true
+  changed_when: false
+  when:
+      - unix_92723
+  tags:
+      - V-92723
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: |
+        "MEDIUM | unix_92727 | The Apache web server must prohibit or restrict the use of nonsecure or unnecessary ports, protocols, modules, and/or services"
+        "LOW | unix_92753 | The Apache web server must be configured in accordance with the security configuration settings based on DoD security configuration or implementation guidance, including STIGs, NSA configuration guides, CTOs, and DTMs"
+  block:
+      - name: |
+              "MEDIUM | unix_92727 | The Apache web server must prohibit or restrict the use of nonsecure or unnecessary ports, protocols, modules, and/or services | Get httpd Listen port"
+              "LOW | unix_92753 | The Apache web server must be configured in accordance with the security configuration settings based on DoD security configuration or implementation guidance, including STIGs, NSA configuration guides, CTOs, and DTMs | Get httpd Listen port"
+        shell: cat /etc/apache2/ports.conf | grep "Listen" | grep -v "#"
+        changed_when: false
+        failed_when: false
+        register: apache_92727_httpd_listenPort
+
+      - name: |
+              "MEDIUM | unix_92727 | The Apache web server must prohibit or restrict the use of nonsecure or unnecessary ports, protocols, modules, and/or services | Get Virutal Host ports"
+              "LOW | unix_92753 | The Apache web server must be configured in accordance with the security configuration settings based on DoD security configuration or implementation guidance, including STIGs, NSA configuration guides, CTOs, and DTMs | Get Virutal Host ports"
+        shell: cat /etc/apache2/sites-enabled/000-default.conf | grep "VirtualHost" | grep -v "#"
+        changed_when: false
+        failed_when: false
+        register: apache_92727_vhost_port
+
+      - name: |
+              "MEDIUM | unix_92727 | The Apache web server must prohibit or restrict the use of nonsecure or unnecessary ports, protocols, modules, and/or services | Alert on ports used"
+              "LOW | unix_92753 | The Apache web server must be configured in accordance with the security configuration settings based on DoD security configuration or implementation guidance, including STIGs, NSA configuration guides, CTOs, and DTMs | Alert on ports used"
+        debug:
+            msg:
+                - "Alert! Below are the ports being used for the webserver. Make sure they adhere to IANA well known ports"
+                - "Apache2 Listen ports: {{ apache_92727_httpd_listenPort.stdout_lines }}"
+                - "Apache2 virtual hosts ports: {{ apache_92727_vhost_port.stdout_lines }}"
+  when:
+      - unix_92727 or unix_92753
+  tags:
+      - V-92727
+      - V-92753
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92731 | The Apache web server must be protected from being stopped by a non-privileged user"
+  block:
+      - name: "MEDIUM | unix_92731 | The Apache web server must be protected from being stopped by a non-privileged user | Get httpd.pid location"
+        command: find / -name "apache2.pid"
+        changed_when: false
+        failed_when: false
+        register: apache_92731_apache2_pid_loc
+
+      - name: "MEDIUM | unix_92731 | The Apache web server must be protected from being stopped by a non-privileged user | Set httpd.pid file permissions"
+        file:
+            path: "{{ apache_92731_apache2_pid_loc.stdout }}"
+            owner: "{{ apache_service_user.apache2 }}"
+            mode: 0644
+
+      - name: "MEDIUM | unix_92731 | The Apache web server must be protected from being stopped by a non-privileged user | Set apachectl permissions"
+        file:
+            path: /usr/sbin/apachectl
+            owner: "{{ apache_service_user.apache2 }}"
+            mode: 0755
+  when:
+      - unix_92731
+  tags:
+      - V-92731
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data"
+  command: /bin/true
+  changed_when: false
+  when:
+      - unix_92741
+  tags:
+      - V-92741
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs)"
+  block:
+      - name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs) | Check installed version number"
+        shell: apache2 -v | grep -i "version" | cut -f2 -d/ | cut -f1 -d'(' | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        register: apache_92749_apache_version
+
+      - name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs) | Check available version number"
+        shell: apt show apache2 | grep Version | cut -f2 -d' ' | cut -f1 -d-
+        changed_when: false
+        register: apache_92749_apache_version_available
+
+      - name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs) | Alert you are on the latest"
+        debug:
+            msg:
+                - "Good News! You are on the latest version of Apache"
+        when: apache_92749_apache_version.stdout == apache_92749_apache_version_available.stdout
+
+      - name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs) | Alert you are not on the latest"
+        debug:
+            msg:
+                - "Alert! You are NOT on the latest version of Apache. You should be no more than 1 version behind"
+                - "Installed version: {{ apache_92749_apache_version.stdout }}"
+                - "available version: {{ apache_92749_apache_version_available.stdout }}"
+        when: apache_92749_apache_version.stdout != apache_92749_apache_version_available.stdout
+
+      - name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs) | Update to latest"
+        apt:
+            name: apache2
+            state: latest
+        when:
+            - apache_92749_apache_version.stdout != apache_92749_apache_version_available.stdout
+            - automate_apache_version_update
+  when:
+      - unix_92749
+  tags:
+      - V-92749
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92757 | The Apache web server htpasswd files (if present) must reflect proper ownership and permissions"
+  block:
+      - name: "MEDIUM | unix_92757 | The Apache web server htpasswd files (if present) must reflect proper ownership and permissions | Find htpasswd file"
+        command: find / -name htpasswd
+        changed_when: false
+        register: apache_92757_htpasswd_loc
+
+      - name: "MEDIUM | unix_92757 | The Apache web server htpasswd files (if present) must reflect proper ownership and permissions | Set permissions"
+        file:
+            path: "{{ item }}"
+            owner: "{{ sys_admin_account }}"
+            mode: 0550
+        with_items:
+            - "{{ apache_92757_htpasswd_loc.stdout_lines }}"
+  when:
+      - unix_92757
+  tags:
+      - V-92757
+      - cat2
+      - medium
+      - Ubuntu
+
+- name: "MEDIUM | unix_92759 | HTTP request methods must be limited"
+  command: /bin/true
+  changed_when: false
+  when:
+      - unix_92759
+  tags:
+      - V-92759
+      - cat2
+      - medium
+      - Ubuntu
+
+# CAT III Tasks
+# Control V-92753 is combined with V-92727 since they have the same remediation

@@ -1,0 +1,109 @@
+---
+- name: Install Apache
+  block:
+      - name: Install httpd
+        yum:
+            name: httpd
+            state: present
+        when: ansible_distribution == "RedHat"
+
+      - name: Install Apache
+        apt:
+            name: apache2
+            state: present
+        when: ansible_distribution == "Ubuntu"
+
+      - name: Start httpd
+        service:
+            name: httpd
+            state: started
+        when: ansible_distribution == "RedHat"
+
+      - name: Start Apache2
+        service:
+            name: apache2
+            state: started
+        when: ansible_distribution == "Ubuntu"
+  when: automate_install
+
+
+# - name: Find httpd.conf file
+#   stat:
+#       path: /etc/httpd/conf/httpd.conf
+#   register: httpd_exist
+
+- name: Generate user list
+  include_tasks: parse_etc_passwd.yml
+  vars:
+      apache_passwd_tasks: "unix_92673"
+  when:
+      - unix_92673
+  tags:
+      - cat1
+      - V-92673
+
+- name: Add additional RHEL repo
+  command: subscription-manager repos --enable rhel-7-server-optional-rpms
+  when:
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "7"
+      - template_configs
+
+- name: Install needed packages
+  yum:
+      name: ['mod_session', 'mod_ssl', 'apr-util-openssl']
+  when:
+      - ansible_distribution == "RedHat"
+      - template_configs
+
+- name: Deploy RedHat config template_configs
+  template:
+      src: "{{ item.src }}"
+      dest: "{{ item.dest }}"
+  with_items:
+      - { src: RedHat/httpd.j2, dest: /etc/httpd/conf/httpd.conf }
+      - { src: RedHat/00-base.j2, dest: /etc/httpd/conf.modules.d/00-base.conf }
+      - { src: RedHat/00-proxy.j2, dest: /etc/httpd/conf.modules.d/00-proxy.conf }
+      - { src: RedHat/01-session.j2, dest: /etc/httpd/conf.modules.d/10-session.conf }
+      - { src: RedHat/ssl.j2, dest: /etc/httpd/conf.d/ssl.conf }
+  when:
+      - ansible_distribution == "RedHat"
+      - template_configs
+
+- name: Deploy RedHat config proxy h2
+  template:
+      src: RedHat/10-proxy_h2.j2
+      dest: /etc/httpd/conf.modules.d/10-proxy_h2.conf
+  when:
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "8"
+      - template_configs
+
+- name: Deploy Ubuntu config template_configs
+  block:
+      - name: Deploy templated config files
+        template:
+            src: "{{ item.src }}"
+            dest: "{{ item.dest }}"
+        with_items:
+            - { src: Ubuntu/apache2.j2, dest: /etc/apache2/apache2.conf }
+            - { src: Ubuntu/ssl.j2, dest: /etc/apache2/mods-available/ssl.conf }
+            - { src: Ubuntu/default-ssl.j2, dest: /etc/apache2/sites-available/default-ssl.conf }
+            - { src: Ubuntu/envvars.j2, dest: /etc/apache2/envars }
+            - { src: Ubuntu/000-default.j2, dest: /etc/apache2/sites-available/000-default.conf }
+            - { src: Ubuntu/ports.j2, dest: /etc/apache2/ports.conf }
+            - { src: Ubuntu/reqtimeout.j2, dest: /etc/apache2/mods-available/reqtimeout.conf }
+
+      - name: Enable Ubuntu Apache2 modules
+        command: a2enmod {{ item }}
+        with_items: 
+            - unique_id
+            - usertrack
+            - session
+            - socache_shmcb
+            - ssl
+            - headers
+            - reqtimeout
+  when:
+      - ansible_distribution == "Ubuntu"
+      - template_configs 

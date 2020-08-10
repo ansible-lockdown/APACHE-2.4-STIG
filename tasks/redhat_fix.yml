@@ -1,0 +1,1136 @@
+---
+# CAT I Tasks
+- name: "HIGH | unix_92645 | The Apache web server must provide install options to exclude the installation of documentation, sample code, example applications, and tutorials"
+  block:
+      - name: "HIGH | unix_92645 | The Apache web server must provide install options to exclude the installation of documentation, sample code, example applications, and tutorials | List items in httpd folder"
+        command: ls /etc/httpd
+        register: apache_92645_httpd_files
+        changed_when: false
+
+      - name: "HIGH | unix_92645 | The Apache web server must provide install options to exclude the installation of documentation, sample code, example applications, and tutorials | Display contents of httpd folder"
+        debug:
+            msg:
+                - "Below is the folder list of items in your httpd folder"
+                - "Review the contents with your ISSO for approval"
+                - "{{ apache_92645_httpd_files.stdout_lines }}"
+  when:
+      - unix_92645
+  tags:
+      - V-92645
+      - cat1
+      - RedHat
+
+- name: "HIGH | unix_92673 | Apache web server application directories, libraries, and configuration files must only be accessible to privileged users"
+  debug:
+      msg:
+          - "Below is the list of users with their user levels"
+          - "Please review with your ISSO"
+          - "{{ passwd_audit }}"
+  when:
+      - unix_92673
+  tags:
+      - V-92673
+      - cat1
+      - high
+      - RedHat
+
+
+- name: "HIGH | unix_92689 | The Apache web server must generate a session ID using as much of the character set as possible to reduce the risk of brute force"
+  replace:
+      path: /etc/httpd/conf.modules.d/00-base.conf
+      regexp: ^#LoadModule unique_id_module modules/mod_unique_id.so
+      replace: "LoadModule unique_id_module modules/mod_unique_id.so"
+  notify: restart httpd
+  when:
+      - unix_92689
+  tags:
+      - V-92689
+      - cat1
+      - high
+      - RedHat
+
+- name: "HIGH | unix_92751 | The account used to run the Apache web server must not have a valid login shell and password defined"
+  block:
+      - name: "HIGH | unix_92751 | The account used to run the Apache web server must not have a valid login shell and password defined | Find httpd user"
+        shell: cat /etc/httpd/conf/httpd.conf | grep 'User ' | cut -f2 -d ' '
+        changed_when: false
+        register: apache_92751_httpd_users
+
+      - name: "HIGH | unix_92751 | The account used to run the Apache web server must not have a valid login shell and password defined | Apply /sbin/nologin to httpd users"
+        user:
+            name: "{{ item }}"
+            shell: /sbin/nologin
+            password_lock: true
+        with_items:
+            - "{{ apache_92751_httpd_users.stdout_lines }}"
+  when:
+      - unix_92751
+  tags:
+      - V-92751
+      - cat1
+      - high
+      - RedHat
+
+- name: "HIGH | unix_92755 | The Apache web server software must be a vendor-supported version"
+  block:
+      - name: "HIGH | unix_92755 | The Apache web server software must be a vendor-supported version | Get httpd version"
+        command: httpd -v
+        register: apache_92755_httpd_current_version
+        changed_when: false
+
+      - name: "HIGH | unix_92755 | The Apache web server software must be a vendor-supported version | Message out current httpd version"
+        debug:
+            msg:
+                - "Alert! Make sure you are on a vendor supported version of Apache/HTTPD"
+                - "The current installed version of httpd is below:"
+                - "{{ apache_92755_httpd_current_version.stdout_lines }}"
+
+      - name: "HIGH | unix_92755 | The Apache web server software must be a vendor-supported version | Update httpd"
+        yum:
+            name: httpd
+            state: latest
+        when: automate_package_upgrades
+  when:
+      - unix_92755
+  tags:
+      - V-92755
+      - cat1
+      - high
+      - RedHat
+
+# CAT II Tasks
+
+- name: "MEDIUM | unix_92597 | The Apache web server must limit the number of allowed simultaneous session requests"
+  block:
+      - name: "MEDIUM | unix_92597 | The Apache web server must limit the number of allowed simultaneous session requests | Set KeepAlive to on"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '^KeepAlive '
+            line: "KeepAlive On"
+            insertafter: ^# Supplemental configuration
+        notify: restart httpd
+
+      - name: "MEDIUM | unix_92597 | The Apache web server must limit the number of allowed simultaneous session requests | Set KeepAliveRequests to 100 or more"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: ^MaxKeepAliveRequests
+            line: "MaxKeepAliveRequests {{ maxkeepaliverequests_count }}"
+            insertafter: ^# Supplemental configuration
+        notify: restart httpd
+  when:
+      - unix_92597
+  tags:
+      - V-92597
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92599 | The Apache web server must perform server-side session management"
+  block:
+      - name: "MEDIUM | unix_92599 | The Apache web server must perform server-side session management | Install Session module"
+        yum:
+            name: mod_session
+            state: present
+
+      - name: "MEDIUM | unix_92599 | The Apache web server must perform server-side session management | Enable usertrack module"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: ^LoadModule usertrack_module modules/mod_usertrack.so
+            line: LoadModule usertrack_module modules/mod_usertrack.so
+            insertafter: ^# Supplemental configuration
+        notify: restart httpd
+
+      - name: "MEDIUM | unix_92599 | The Apache web server must perform server-side session management | Enable session module"
+        replace:
+            path: /etc/httpd/conf.modules.d/01-session.conf
+            regexp: ^#LoadModule session_module modules/mod_session.so
+            replace: LoadModule session_module modules/mod_session.so
+        notify: restart httpd
+  when:
+      - unix_92599
+  tags:
+      - V-92599
+      - cat2
+      - medium
+      - RedHat
+
+- name: |
+        "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions"
+        "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information"
+  block:
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Install SSL module"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Install SSL module"
+        yum:
+            name: mod_ssl
+            state: present
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Apply SSL Porotocol setting"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Apply SSL Protocol setting"
+        replace:
+            path: /etc/httpd/conf.d/ssl.conf
+            regexp: '^(.*?)SSLProtocol.*'
+            replace: SSLProtocol -ALL +TLSv1.2
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Get SSLCACertificateFile path"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Get SSLCACertificateFile path"
+        shell: cat /etc/httpd/conf.d/ssl.conf | grep -h "SSLCACertificateFile" | cut -f2 -d' ' | sed 's|\(.*\)/.*|\1|'
+        changed_when: false
+        failed_when: false
+        register: apache_92745_sslcacertifcatefile_path
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Confirm SSLA Cert path"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Confirm SSLA Cert path"
+        stat:
+            path: "{{ apache_92745_sslcacertifcatefile_path.stdout }}"
+        register: apache_92601_sslacert_path_exist
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Create path"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Create path"
+        file:
+            path: "{{ sslacertificatefile_settings.path }}"
+            state: directory
+        when: not apache_92601_sslacert_path_exist.stat == false
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Create SSLA Cert file"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Create SSLA Cert File"
+        copy:
+            src: 'files/{{ sslacertificatefile_settings.file }}'
+            dest: '{{ sslacertificatefile_settings.path }}/{{ sslacertificatefile_settings.file }}'
+        when: not apache_92601_sslacert_path_exist.stat == false
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Set SSLCACertificateFile path"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Set SSLCACertificateFile path"
+        replace:
+            path: /etc/httpd/conf.d/ssl.conf
+            regexp: '^(.*?)SSLCACertificateFile.*'
+            replace: 'SSLCACertificateFile {{ sslacertificatefile_settings.pathrh }}/{{ sslacertificatefile_settings.file }}'
+        notify: restart httpd
+        when:
+            - apache_92745_sslcacertifcatefile_path.rc == 0            
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Get CA cert list"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Get CA cert list"
+        command: cat {{ sslacertificatefile_settings.path }}/{{ sslacertificatefile_settings.file }}
+        changed_when: false
+        failed_when: false
+        register: apache_92745_ca_bundle_list
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | List CA cert list"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | List CA cert list"
+        debug:
+            msg:
+                - "Alert! Below are the list of CA's, please make sure they are DoD approved"
+                - "{{ apache_92745_ca_bundle_list.stdout_lines }}"
+        when: apache_92745_ca_bundle_list.stdout != ""
+
+      - name: |
+              "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Warn no CA cert list"
+              "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Warn no CA cert list"
+        debug:
+            msg:
+                - "Warning! You have no CA's, please remedy"
+        when: apache_92745_ca_bundle_list.stdout == ""
+  when:
+      - unix_92601
+      - unix_92745
+  tags:
+      - V-92601
+      - V-92745
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92607 | The Apache web server must have system logging enabled"
+  lineinfile:
+      path: /etc/httpd/conf/httpd.conf
+      regexp: '   CustomLog '
+      line: '    CustomLog "{{ httpd_custom_log.path }}" {{ httpd_custom_log.format }}'
+      insertafter: '#CustomLog'
+  notify: restart httpd
+  when:
+      - unix_92607
+  tags:
+      - V-92607
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM |unix_92609 | The Apache web server must generate, at a minimum, log records for system startup and shutdown, system access, and system authentication events"
+  lineinfile:
+      path: /etc/httpd/conf/httpd.conf
+      regexp: '(.*?)# a CustomLog directive (see below).'
+      line: '    LogFormat "%a %A %h %H %l %m %s %u %t %U \"%{Referer}i\" " common'
+      insertafter: '(.*?)# a CustomLog directive'
+  notify: restart httpd
+  when:
+      - unix_92609
+  tags:
+      - V-92609
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92621 | An Apache web server, behind a load balancer or proxy server, must produce log records containing the client IP information as the source and destination and not the load balancer or proxy IP information with each event"
+  block:  
+      - name: "MEDIUM | unix_92621 | An Apache web server, behind a load balancer or proxy server, must produce log records containing the client IP information as the source and destination and not the load balancer or proxy IP information with each event | Get source IP settings"
+        shell: cat /etc/httpd/conf/httpd.conf | grep LogFormat
+        changed_when: false
+        register: apache_92621_source_ip_settings
+
+      - name: "MEDIUM | unix_92621 | An Apache web server, behind a load balancer or proxy server, must produce log records containing the client IP information as the source and destination and not the load balancer or proxy IP information with each event | Display source IP settings"
+        debug:
+            msg:
+                - "Alert! Below are the current source log settings:"
+                - "{{ apache_92621_source_ip_settings.stdout_lines }}"
+  when:
+      - unix_92621
+  tags:
+      - V-92621
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92627 | The Apache web server must use a logging mechanism that is configured to alert the Information System Security Officer (ISSO) and System Administrator (SA) in the event of a processing failure"
+  debug:
+      msg: "Alert! Please work with SIEMA Administrator to configure an alert when no audit data is received from Apache based on defined schedule of connections"
+  when:
+      - unix_92627
+  tags:
+      -V-92627
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users"
+  block:
+      - name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users | Get list of log files"
+        command: ls /etc/httpd/logs
+        changed_when: false
+        register: log_files
+
+      - name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users | Set permissions on log files"
+        file:
+            path: /etc/httpd/logs/{{ item }}
+            owner: "{{ logs_owner.user }}"
+            group: "{{ logs_owner.group }}"
+            mode: "{{ logs_owner.perms }}"
+        with_items:
+            - "{{ log_files.stdout_lines }}"
+        when: log_files.stdout is defined
+  when:
+      - unix_92629
+  tags:
+      - V-92629
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92631 | The log information from the Apache web server must be protected from unauthorized modification or deletion"
+  block:
+      - name: Register httpd error log path
+        shell: cat /etc/httpd/conf/httpd.conf | grep 'ErrorLog "' | cut -f2 -d ' ' | sed 's/"//g'
+        changed_when: false
+        register: httpd_error_log_path
+
+      - name: "MEDIUM | unix_92631 | The log information from the Apache web server must be protected from unauthorized modification or deletion | Find log files"
+        command: ls /etc/httpd/{{ httpd_error_log_path.stdout }}
+        changed_when: false
+        failed_when: false
+        register: apache_92631_log_files
+
+      - name: "MEDIUM | unix_92631 | The log information from the Apache web server must be protected from unauthorized modification or deletion | Alert Error Log path not configured"
+        debug:
+            msg: "Warning! The error log path/file are not configured, please address"
+        when: apache_92631_log_files.stdout == ""
+
+      - name: "MEDIUM | unix_92631 | The log information from the Apache web server must be protected from unauthorized modification or deletion | Set permissions"
+        file:
+            path: "/etc/httpd/{{ httpd_error_log_path.stdout }}"
+            owner: "{{ logs_owner.user }}"
+            mode: "{{ logs_owner.perms }}"
+        when: apache_92631_log_files.stdout != ""
+  when:
+      - unix_92631
+  tags:
+      - V-92631
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92635 | The log data and records from the Apache web server must be backed up onto a different system or media"
+  debug:
+      msg:
+          - "Alert! Please interview the Information System Security Officer, System Administrator, Web Manager, Webmaster, or developers as necessary"
+          - "to determine whether a tested and verifiable backup strategy has been implemented for web server software and all web server data files."
+  when:
+      - unix_92635
+  tags:
+      - V-92635
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92637 | Expansion modules must be fully reviewed, tested, and signed before they can exist on a production Apache web server"
+  block:
+      - name: "MEDIUM | unix_92637 | Expansion modules must be fully reviewed, tested, and signed before they can exist on a production Apache web server | Get list of loaded modules"
+        command: httpd -M
+        failed_when: false
+        register: apache_92637_loaded_modules
+
+      - name: "MEDIUM | unix_92637 | Expansion modules must be fully reviewed, tested, and signed before they can exist on a production Apache web server | Get list of assigned modules"
+        debug:
+            msg:
+                - "Alert! Below is the list of loaded modules. Validate that all displayed modules are required for operations."
+                - "{{ apache_92637_loaded_modules.stdout_lines }}"
+  when:
+      - unix_92637
+  tags:
+      - V-92637
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92639 | The Apache web server must not perform user management for hosted applications"
+  replace:
+      path: /etc/httpd/conf/httpd.conf
+      regexp: '(.*?)AuthUserFile'
+      replace: '# AuthUserFile'
+  notify: restart httpd
+  when:
+      - unix_92639
+  tags:
+      - V-92639
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92641 | The Apache web server must only contain services and functions necessary for operation"
+  block:
+      - name: "MEDIUM | unix_92641 | The Apache web server must only contain services and functions necessary for operation | Register httpd document directory"
+        shell: cat /etc/httpd/conf/httpd.conf | grep 'DocumentRoot ' | cut -f2 -d ' ' | cut -f2 -d '"'
+        changed_when: false
+        register: httpd_doc_dir
+
+      - name: "MEDIUM | unix_92641 | The Apache web server must only contain services and functions necessary for operation | Remove index.html from documents root directory"
+        file:
+            path: "{{ httpd_doc_dir.stdout }}/index.html"
+            state: absent
+
+      - name: "MEDIUM | unix_92641 | The Apache web server must only contain services and functions necessary for operation | Verify Manual content is removed"
+        yum:
+            name: httpd-manual
+            state: absent
+
+      - name: "MEDIUM | unix_92641 | The Apache web server must only contain services and functions necessary for operation | Alert on Server Status handler and Server Information handler"
+        debug:
+            msg:
+                - "Alert! Please review the configuration files and remove/comment out to disable Server Status handler"
+                - "Alert! Please review the configuration files and remove/comment out to disable Server Infomration handler"
+                - "Alert! Please review the configuration files and remove/comment out to disable any other hanlders such as perl-status"
+  when:
+      - unix_92641
+  tags:
+      - V-92641
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92643 | The Apache web server must not be a proxy server"
+  block:
+      - name: "MEDIUM | unix_92643 | The Apache web server must not be a proxy server | Remove proxy modules proxy.conf"
+        replace:
+            path: /etc/httpd/conf.modules.d/00-proxy.conf
+            regexp: '^LoadModule {{ item }}'
+            replace: '# LoadModule {{ item }}'
+        with_items:
+            - lbmethod_
+            - proxy_
+
+      - name: "MEDIUM | unix_92643 | The Apache web server must not be a proxy server | Remove proxy modules proxy_h2.conf"
+        replace:
+            path: /etc/httpd/conf.modules.d/10-proxy_h2.conf
+            regexp: '^LoadModule proxy_'
+            replace: '# LoadModule proxy_'
+        when: ansible_distribution_major_version == "8"
+
+      - name: "MEDIUM | unix_92643 | The Apache web server must not be a proxy server | Remove ProxyRequest from config"
+        replace:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '^ProxyRequests On'
+            replace: 'ProxyRequests Off'
+        notify: restart httpd
+  when:
+      - unix_92643
+  tags:
+      - V-92643
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92653 | The Apache web server must have resource mappings set to disable the serving of certain file types"
+  block:
+      - name: "MEDIUM | unix_92653 | The Apache web server must have resource mappings set to disable the serving of certain file types | Remove AddHandler settings"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '(.*?)AddHandler cgi-script {{ item }}'
+            state: absent
+        with_items:
+            - .exe
+            - .dll
+            - .com
+            - .bat
+            - .csh
+
+      - name: "MEDIUM | unix_92653 | The Apache web server must have resource mappings set to disable the serving of certain file types | Remove Action settings"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '(.*?)Action {{ item }}.*'
+            state: absent
+        with_items:
+            - .exe
+            - .dll
+            - .com
+            - .bat
+            - .csh
+  when:
+      - unix_92653
+  tags:
+      - V-92653
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92655 | The Apache web server must allow the mappings to unused and vulnerable scripts to be removed"
+  block:
+      - name: "MEDIUM | unix_92655 | The Apache web server must allow the mappings to unused and vulnerable scripts to be removed | Get Script, ScriptAlias, ScriptAliasMatch, and ScriptInterpreterSource settings"
+        shell: cat /etc/httpd/conf/httpd.conf | grep -i "Script" | grep '^[[:blank:]]*[^[:blank:]#;]' | sed -e 's/^[ \t]*//'
+        changed_when: false
+        register: apache_92655_script_settings
+
+      - name: "MEDIUM | unix_92655 | The Apache web server must allow the mappings to unused and vulnerable scripts to be removed | Alert on script settings"
+        debug:
+            msg:
+                - "Alert! Below are the script settings in place. Please review with ISSO"
+                - "and remove any that are not needed"
+                - "{{ apache_92655_script_settings.stdout_lines }}"
+  when:
+      - unix_92655
+  tags:
+      - V-92655
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92659 | The Apache web server must have Web Distributed Authoring (WebDAV) disabled"
+  block:
+      - name: "MEDIUM | unix_92659 | The Apache web server must have Web Distributed Authoring (WebDAV) disabled | Find dav_module location"
+        command: grep -rl "dav_module" /etc/httpd
+        changed_when: false
+        register: apache_92659_dav_mod_location
+
+      - name: "MEDIUM | unix_92659 | The Apache web server must have Web Distributed Authoring (WebDAV) disabled | Adjust modules"
+        replace:
+            path: "{{ apache_92659_dav_mod_location.stdout }}"
+            regexp: '^LoadModule {{ item }}'
+            replace: '#LoadModule {{ item }}'
+        with_items:
+            - dav_module
+            - dav_fs_module
+            - dav_lock_module
+        notify: restart httpd
+  when:
+      - unix_92659
+  tags:
+      - V-92659
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92661 | The Apache web server must be configured to use a specified IP address and port"
+  replace:
+      path: /etc/httpd/conf/httpd.conf
+      regexp: '^Listen(.*?).*'
+      replace: 'Listen {{ listen_config.ip }}:{{ listen_config.port }}'
+  notify: restart httpd
+  when:
+      - unix_92661
+  tags:
+      - V-92661
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92671 | Apache web server accounts accessing the directory tree, the shell, or other operating system functions and utilities must only be administrative accounts"
+  debug:
+      msg:
+          - "Warning! This is an OS level control and should be handled in an OS Role"
+  when:
+      - unix_92671
+  tags:
+      - V-92671
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92675 | The Apache web server must separate the hosted applications from hosted Apache web server management functionality"
+  command: /bin/true
+  changed_when: false
+  when:
+      - unix_92675
+  tags:
+      - V-92675
+      - cat2
+      - medium
+      - RedHat
+      - notimplemented
+
+- name: "MEDIUM | unix_92677 | The Apache web server must invalidate session identifiers upon hosted application user logout or other session termination"
+  lineinfile:
+      path: /etc/httpd/conf/httpd.conf
+      regexp: '^SessionMaxAge(.*?).*'
+      line: 'SessionMaxAge {{ session_max_age }}'
+      insertafter: ^# Supplemental configuration
+  notify: restart httpd
+  when:
+      - unix_92677
+  tags:
+      - V-92677
+      - cat2
+      - medium
+      - RedHat
+
+# The restart task is to force the httpd.pid file to show up. During testing I found intermittenly it was not created with the initial restart, this made it exist consistently. 
+- name: |
+        "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application"
+        "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data"
+  block:
+      - name: |
+              "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Restart httpd service"
+              "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data | Restart httpd service"
+        service:
+            name: httpd
+            state: restarted
+
+      - name: |
+              "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Check for headers module
+              "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data | Check for eaders module"
+        shell: httpd -M | grep -i 'headers_module (shared)'
+        changed_when: false
+        register: apache_92679_headers_module_enabled
+
+      - name: |
+              "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Install Headers module"
+              "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data | Install Headers module"
+        debug:
+            msg:
+                - "Warning! You do not have the headers module enabled, please Install"
+        when: "'headers_module (shared)' not in apache_92679_headers_module_enabled.stdout"
+
+      - name: |
+              "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Register no HttpOnly and secure"
+              "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data | Register no HttpOnly and secure"
+        shell: cat /etc/httpd/conf/httpd.conf | grep -i "sessioncookiename" | grep -ivE 'httponly|secure' | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        register: apache_92679_no_httponly_secure
+
+      - name: |
+              "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Register only HttpOnly"
+              "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data | Register only HttpOnly"
+        shell: cat /etc/httpd/conf/httpd.conf | grep -i "sessioncookiename" | grep -i 'httponly' | grep -v 'secure' | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        register: apache_92679_no_secure_only
+        when: apache_92679_no_httponly_secure.stdout == ""
+
+      - name: |
+              "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Register only secure"
+              "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data | Register only secure"
+        shell: cat /etc/httpd/conf/httpd.conf | grep -i "sessioncookiename" | grep -i 'secure' | grep -iv 'httponly' | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        register: apache_92679_no_httponly_only
+        when: apache_92679_no_httponly_secure.stdout == ""
+
+      - name: |
+              "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Add both HttpOnly and secure"
+              "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data | Add both HttpOnly and secure"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '(.*?)SessionCookieName.*'
+            line: '    {{ apache_92679_no_httponly_secure.stdout }};HttpOnly;secure'
+        when: apache_92679_no_httponly_secure.stdout != ""
+        notify: restart httpd
+
+      - name: |
+              "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Add secure"
+              "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data | Add secure"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '(.*?)SessionCookieName.*'
+            line: '    {{ apache_92679_no_secure_only.stdout }};secure'
+        when:
+            - apache_92679_no_httponly_secure.stdout == ""
+            - apache_92679_no_secure_only.stdout != ""
+        notify: restart httpd
+
+      - name: |
+              "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Add HttpOnly"
+              "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data | Add HttpOnly"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '(.*?)SessionCookieName.*'
+            line: '    {{ apache_92679_no_httponly_only.stdout }};HttpOnly'
+        when:
+            - apache_92679_no_httponly_secure.stdout == ""
+            - apache_92679_no_httponly_only.stdout != ""
+        notify: restart httpd
+
+      - name: "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data | Set Session On"
+        replace:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '    Session .*'
+            replace: '    Session On'
+        notify: restart httpd
+
+      - name: |
+              "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application | Enable Request Module"
+              "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data | Enable Request Module"
+        replace:
+            path: /etc/httpd/conf.modules.d/00-base.conf
+            regexp: '^#LoadModule request_module modules/mod_request.so'
+            replace: 'LoadModule request_module modules/mod_request.so'
+        notify: restart httpd
+  when:
+      - unix_92679
+      - unix_92741
+  tags:
+      - V-92679
+      - V-92741
+      - cat2
+      - medium
+      - RedHat
+
+# The base package does not contain the apr_crypto_openssl module, which is in the apr-util-openssl package. The default repo does not contain the apr-util-openssl
+# That is the reason we add a repo (Offiical RedHat repo) and install apr-util-openssl
+# Here is the bug ticket for this item https://bugzilla.redhat.com/show_bug.cgi?id=1633152
+
+- name: "MEDIUM | unix_92687 | The Apache web server must generate a session ID long enough that it cannot be guessed through brute force"
+  block:
+      - name: "MEDIUM | unix_92687 | The Apache web server must generate a session ID long enough that it cannot be guessed through brute force | Add rhel-7-server-optional-rpms repo for apr-util-openssl"
+        command: subscription-manager repos --enable rhel-7-server-optional-rpms
+        when: ansible_distribution_major_version == "8"
+
+      - name: "MEDIUM | unix_92687 | The Apache web server must generate a session ID long enough that it cannot be guessed through brute force | Install apr-util-openssl"
+        yum:
+            name: apr-util-openssl
+            state: present
+
+      - name: "MEDIUM | unix_92687 | The Apache web server must generate a session ID long enough that it cannot be guessed through brute force | Enable the session_crypto_module"
+        replace:
+            path: /etc/httpd/conf.modules.d/01-session.conf
+            regexp: '^#LoadModule session_crypto_module'
+            replace: 'LoadModule session_crypto_module'
+
+      - name: "MEDIUM | unix_92687 | The Apache web server must generate a session ID long enough that it cannot be guessed through brute force | set SessionCryptoCipher"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '^SessionCryptoCipher(.*?).*'
+            line: 'SessionCryptoCipher aes256'
+            insertafter: ^# Supplemental configuration
+        notify: restart httpd
+  when:
+      - unix_92687
+  tags:
+      - V-92687
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92695 | The Apache web server must be built to fail to a known safe state if system initialization fails, shutdown fails, or aborts fail"
+  debug:
+      msg:
+          - "Alert! Please work with your System Administrator to create a disaster recovery plan"
+          - "Ask for documentation on the disaster recovery methods tested and planned for the Apache 2.4 web server in the event of the necessity for rollback."
+  when:
+      - unix_92695
+  tags:
+      - V-92695
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92697 | The Apache web server must be tuned to handle the operational requirements of the hosted application"
+  lineinfile:
+      path: /etc/httpd/conf/httpd.conf
+      regexp: '^Timeout(.*?).*'
+      line: 'Timeout 10'
+      insertafter: ^# Supplemental configuration
+  notify: restart httpd
+  when:
+      - unix_92697
+  tags:
+      - V-92697
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92699 | Warning and error messages displayed to clients must be modified to minimize the identity of the Apache web server, patches, loaded modules, and directory paths"
+  lineinfile:
+      path: /etc/httpd/conf/httpd.conf
+      line: '{{ item }}'
+      insertbefore: '^# EnableMMAP and EnableSendfile:(.*?).*'
+  with_items:
+      - "{{ custom_error_messages }}"
+  notify: restart httpd
+  when:
+      - unix_92699
+  tags:
+      - V-92699
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92701 | Debugging and trace information used to diagnose the Apache web server must be disabled"
+  block:
+      - name: "MEDIUM | unix_92701 | Debugging and trace information used to diagnose the Apache web server must be disabled | Set TraceEnable"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '^TraceEnable(.*?).*'
+            line: 'TraceEnable Off'
+            insertafter: ^# Supplemental configuration
+        notify: restart httpd
+
+      - name: "MEDIUM | unix_92701 | Debugging and trace information used to diagnose the Apache web server must be disabled | Set LogLevel"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '^LogLevel(.*?).*'
+            line: 'LogLevel info'
+            insertafter: ^# Supplemental configuration
+        notify: restart httpd
+  when:
+      - unix_92701
+  tags:
+      - V-92701
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92705 | The Apache web server must set an inactive timeout for sessions"
+  block:
+      - name: "MEDIUM | unix_92705 | The Apache web server must set an inactive timeout for sessions | Enable reqtimeout_module"
+        replace:
+            path: /etc/httpd/conf.modules.d/00-base.conf
+            regexp: '^#LoadModule reqtimeout_module modules/mod_reqtimeout.so'
+            replace: LoadModule reqtimeout_module modules/mod_reqtimeout.so
+        notify: restart httpd
+
+      - name: "MEDIUM | unix_92705 | The Apache web server must set an inactive timeout for sessions | Set RequestReadTimeout"
+        lineinfile:
+            path: /etc/httpd/conf/httpd.conf
+            regexp: '^RequestReadTimeout'
+            line: 'RequestReadTimeout {{ requestreadtimeout_values.httpd }}'
+            insertafter: ^# Supplemental configuration
+        notify: restart httpd
+  when:
+      - unix_92705
+  tags:
+      - V-92705
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92709 | The Apache web server must restrict inbound connections from nonsecure zones"
+  block:
+      - name: "MEDIUM | unix_92709 | The Apache web server must restrict inbound connections from nonsecure zones | Check for configs"
+        shell: cat /etc/httpd/conf/httpd.conf | grep -i "RequireAll"
+        changed_when: false
+        failed_when: false
+        register: apache_92709_requireall_exist
+
+      - name: "MEDIUM | unix_92709 | The Apache web server must restrict inbound connections from nonsecure zones | Alert on configs"
+        debug:
+            msg:
+                - "Alert! You have RequireAll configured. Please review settings"
+                - "If RequireAll is not configured or IP ranges configured to allow are not restrictive enough to prevent connections"
+                - "from nonsecure zones, this is a finding."
+        when: apache_92709_requireall_exist.rc == 0
+
+      - name: "MEDIUM | unix_92709 | The Apache web server must restrict inbound connections from nonsecure zones | Insert Settings"
+        blockinfile:
+            path: /etc/httpd/conf/httpd.conf
+            block: "{{ requireall_settings }}"
+            marker: "# {mark} RequireAll ANSIBLE MANAGED BLOCK"
+            insertbefore: ^# Supplemental configuration
+        when: apache_92709_requireall_exist.rc == 1
+        notify: restart httpd
+  when:
+      - unix_92709
+      - not host_based_firewall
+  tags:
+      - V-92709
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92711 | The Apache web server must be configured to immediately disconnect or disable remote access to the hosted applications"
+  command: /bin/true
+  changed_when: false
+  when:
+      - unix_92711
+  tags:
+      - V-92711
+      - cat2
+      - medium
+      - RedHat
+      - notimplemented
+
+- name: "MEDIUM | unix_92713 | Non-privileged accounts on the hosting system must only access Apache web server security-relevant information and functions through a distinct administrative account"
+  debug:
+      msg:
+          - "Alert! Determine tool or control file is used to control the configuration of the web server"
+          - "If the control of the web server is done via control files, Verify who has update access to them."
+          - "If tools are being used to configure the web server, determine who has access to those tools."
+  when:
+      - unix_92713
+  tags:
+      - V-92713
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92715 | The Apache web server must use a logging mechanism that is configured to allocate log record storage capacity large enough to accommodate the logging requirements of the Apache web server"
+  debug:
+      msg:
+          - "Alert! Please work with SIEM administrative to determine the SIEM is configured to allocate log record storage capacity"
+          - "large enough to accommodate logging requirements of the Apache server."
+  when:
+      - unix_92715
+  tags:
+      - V-92715
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92717 | The Apache web server must not impede the ability to write specified log record content to an audit log server"
+  debug:
+      msg:
+          - "Alert! Work with the SIEM administrator to allow the ability to write specified log record content to an audit log server."
+  when:
+      - unix_92717
+  tags:
+      - V-92717
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92719 | The Apache web server must be configured to integrate with an organizations security infrastructure"
+  debug:
+      msg:
+          - "Alert! Work with the SIEM administrator to integrate with an organizations security infrastructure."
+  when:
+      - unix_92719
+  tags:
+      - V-92719
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92723 | The Apache web server must generate log records that can be mapped to Coordinated Universal Time (UTC) or Greenwich Mean Time (GMT) which are stamped at a minimum granularity of one second"
+  block:
+      - name: "MEDIUM | unix_92723 | The Apache web server must generate log records that can be mapped to Coordinated Universal Time (UTC) or Greenwich Mean Time (GMT) which are stamped at a minimum granularity of one second | Check if log_config_module exists"
+        shell: cat /etc/httpd/conf/httpd.conf | grep -i "<IfModule log_config_module>"
+        changed_when: false
+        register: apache_92723_log_config_module_exist
+
+      - name: "MEDIUM | unix_92723 | The Apache web server must generate log records that can be mapped to Coordinated Universal Time (UTC) or Greenwich Mean Time (GMT) which are stamped at a minimum granularity of one second | Add log_config_module section"
+        blockinfile:
+            path: /etc/httpd/conf/httpd.conf
+            marker: "# {mark} log_config_module ANSIBLE MANAGED BLOCK"
+            block: |
+                <IfModule log_config_module>
+                    #
+                    # The following directives define some format nicknames for use with
+                    # a CustomLog directive (see below).
+                    #
+                    LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
+                    LogFormat "%h %l %u %t \"%r\" %>s %b" common
+                    LogFormat "%a %A %h %H %l %m %s %u %t %U \"%{Referer}i\" " common
+
+                    <IfModule logio_module>
+                      # You need to enable mod_logio.c to use %I and %O
+                      LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\" %I %O" combinedio
+                    </IfModule>
+
+                    #
+                    # The location and format of the access logfile (Common Logfile Format).
+                    # If you do not define any access logfiles within a <VirtualHost>
+                    # container, they will be logged here.  Contrariwise, if you *do*
+                    # define per-<VirtualHost> access logfiles, transactions will be
+                    # logged therein and *not* in this file.
+                    #
+                    #CustomLog "logs/access_log" common
+
+                    #
+                    # If you prefer a logfile with access, agent, and referer information
+                    # (Combined Logfile Format) you can use the following directive.
+                    #
+                    CustomLog "logs/access_log" combined
+                </IfModule>
+        when: apache_92723_log_config_module_exist.stdout == ""
+  when:
+      - unix_92723
+  tags:
+      - V-92723
+      - cat2
+      - medium
+      - RedHat
+      - notimplemented
+
+- name: |
+        "MEDIUM | unix_92727 | The Apache web server must prohibit or restrict the use of nonsecure or unnecessary ports, protocols, modules, and/or services"
+        "LOW | unix_92753 | The Apache web server must be configured in accordance with the security configuration settings based on DoD security configuration or implementation guidance, including STIGs, NSA configuration guides, CTOs, and DTMs"
+  block:
+      - name: |
+              "MEDIUM | unix_92727 | The Apache web server must prohibit or restrict the use of nonsecure or unnecessary ports, protocols, modules, and/or services | Get httpd Listen port"
+              "LOW | unix_92753 | The Apache web server must be configured in accordance with the security configuration settings based on DoD security configuration or implementation guidance, including STIGs, NSA configuration guides, CTOs, and DTMs | Get httpd Listen port"
+        shell: cat /etc/httpd/conf/httpd.conf | grep "Listen" | grep -v "#"
+        changed_when: false
+        failed_when: false
+        register: apache_92727_httpd_listenPort
+
+      - name: |
+              "MEDIUM | unix_92727 | The Apache web server must prohibit or restrict the use of nonsecure or unnecessary ports, protocols, modules, and/or services | Get Virutal Host ports"
+              "LOW | unix_92753 | The Apache web server must be configured in accordance with the security configuration settings based on DoD security configuration or implementation guidance, including STIGs, NSA configuration guides, CTOs, and DTMs | Get Virutal Host ports"
+        shell: cat /etc/httpd/conf/httpd.conf | grep "VirtualHost" | grep -v "#"
+        changed_when: false
+        failed_when: false
+        register: apache_92727_vhost_port
+
+      - name: |
+              "MEDIUM | unix_92727 | The Apache web server must prohibit or restrict the use of nonsecure or unnecessary ports, protocols, modules, and/or services | Alert on ports used"
+              "LOW | unix_92753 | The Apache web server must be configured in accordance with the security configuration settings based on DoD security configuration or implementation guidance, including STIGs, NSA configuration guides, CTOs, and DTMs | Alert on ports used"
+        debug:
+            msg:
+                - "Alert! Below are the ports being used for the webserver. Make sure they adhere to IANA well known ports"
+                - "httpd List ports: {{ apache_92727_httpd_listenPort.stdout_lines }}"
+                - "httpd virtual hosts ports: {{ apache_92727_vhost_port.stdout_lines }}"
+  when:
+      - unix_92727 or unix_92753
+  tags:
+      - V-92727
+      - cat2
+      - medium
+      - low
+      - RedHat
+
+- name: "MEDIUM | unix_92731 | The Apache web server must be protected from being stopped by a non-privileged user"
+  block:
+      - name: "MEDIUM | unix_92731 | The Apache web server must be protected from being stopped by a non-privileged user | Get httpd.pid location"
+        command: find / -name "httpd.pid"
+        changed_when: false
+        failed_when: false
+        register: apache_92731_httpd_pid_loc
+
+      - name: "MEDIUM | unix_92731 | The Apache web server must be protected from being stopped by a non-privileged user | Set httpd.pid file permissions"
+        file:
+            path: "{{ apache_92731_httpd_pid_loc.stdout }}"
+            owner: "{{ apache_service_user.httpd }}"
+            mode: 644
+
+      - name: "MEDIUM | unix_92731 | The Apache web server must be protected from being stopped by a non-privileged user | Set apachectl permissions"
+        file:
+            path: /usr/sbin/apachectl
+            owner: "{{ apache_service_user.httpd }}"
+            mode: 755
+  when:
+      - unix_92731
+  tags:
+      - V-92731
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs)"
+  block:
+      - name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs) | Check installed version number"
+        shell: httpd -v | grep -i "version" | cut -f2 -d/ | cut -f1 -d'(' | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        register: apache_92749_apache_version
+
+      - name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs) | Check available version number"
+        shell: yum info httpd | grep -i "version" | cut -f2 -d':' | sed 's/^[ \t]*//;s/[ \t]*$//'
+        changed_when: false
+        register: apache_92749_apache_version_available
+
+      - name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs) | Alert you are on the latest"
+        debug:
+            msg:
+                - "Good News! You are on the latest version of Apache"
+        when: apache_92749_apache_version.stdout == apache_92749_apache_version_available.stdout
+
+      - name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs) | Alert you are not on the latest"
+        debug:
+            msg:
+                - "Alert! You are NOT on the latest version of Apache. You should be no more than 1 version behind"
+                - "Installed version: {{ apache_92749_apache_version.stdout }}"
+                - "Available version: {{ apache_92749_apache_version_available.stdout }}"
+        when: apache_92749_apache_version.stdout != apache_92749_apache_version_available.stdout
+
+      - name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs) | Update to latest"
+        yum:
+            name: httpd
+            state: latest
+        when:
+            - apache_92749_apache_version.stdout != apache_92749_apache_version_available.stdout
+            - automate_apache_version_update
+  when:
+      - unix_92749
+  tags:
+      - V-92749
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92757 | The Apache web server htpasswd files (if present) must reflect proper ownership and permissions"
+  block:
+      - name: "MEDIUM | unix_92757 | The Apache web server htpasswd files (if present) must reflect proper ownership and permissions | Find htpasswd file"
+        command: find / -name htpasswd
+        changed_when: false
+        register: apache_92757_htpasswd_loc
+
+      - name: "MEDIUM | unix_92757 | The Apache web server htpasswd files (if present) must reflect proper ownership and permissions | Set permissions"
+        file:
+            path: "{{ item }}"
+            owner: "{{ sys_admin_account }}"
+            mode: 0550
+        with_items:
+            - "{{ apache_92757_htpasswd_loc.stdout_lines }}"
+  when:
+      - unix_92757
+  tags:
+      - V-92757
+      - cat2
+      - medium
+      - RedHat
+
+- name: "MEDIUM | unix_92759 | HTTP request methods must be limited"
+  command: /bin/true
+  changed_when: false
+  when:
+      - unix_92759
+  tags:
+      - V-92759
+      - cat2
+      - medium
+      - RedHat
+      - notimplemented
+
+# CAT III Tasks
+# Control V-92753 is combined with V-92727 since they have the same remediation

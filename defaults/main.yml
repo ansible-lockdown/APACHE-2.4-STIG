@@ -1,0 +1,202 @@
+---
+# The below settings are to run a report at the of the role deploy
+# The scan will be an OpenSCAP scan and the reprt results will use
+# the folders below
+apache_oscap_scan: false
+apache_unix_report_dir: /tmp
+apache_win_report_dir: C:\windows\temp
+
+# These settings will enable/disable entire STIG categories
+# yes=enabled/no=disabled
+unix_cat1_patch: true
+unix_cat2_patch: true
+unix_cat3_patch: true
+
+# There doesn't seem to be a complexity in apache, but I have the control implemented
+apache_complexity_high: false
+
+# Show "changed" for complex items not remediated per complexity-high setting
+# to make them stand out.  "changed" items on a second run of the role would
+# indicate items requiring manual review.
+apache_audit_complex: false
+
+# We've defined disruption-high to indicate items that are likely to cause
+# disruption in a normal workflow.  These items can be remediated automatically
+# but are disabled by default to avoid disruption.
+rhel7stig_disruption_high: false
+
+# Show "changed" for disruptive items not remediated per disruption-high
+# setting to make them stand out.
+apache_audit_disruptive: false
+
+apache_skip_for_travis: false
+
+apache_workaround_for_disa_benchmark: true
+apache_workaround_for_ssg_benchmark: true
+
+# tweak role to run in a chroot, such as in kickstart %post script
+apache_system_is_chroot: "{{ ansible_is_chroot | default(False) }}"
+
+# Unix can use httpd or Aapach. The below variable set's whether it's httpd or not
+# httpd_server: "{{ httpd_exist.stat.exists }}"
+
+# This toggle will install the needed packages for your web server
+# true will install packages and false will skip package install
+automate_install: true
+
+# There are tasks that ask if you to be on the latest version. This togle will upgrade to the latest packages
+# true will upgrade and false will will NOT upgrade
+automate_package_upgrades: true
+
+# This option is for new installs only. It will replace existing configuration files
+# with our base configuration files. 
+template_configs: false
+
+# CAT 1 Rules
+unix_92645: true
+unix_92673: true
+unix_92689: true
+unix_92751: true
+unix_92755: true
+
+# CAT 2 Rules
+unix_92597: true
+unix_92599: true
+unix_92601: true
+unix_92607: true
+unix_92609: true
+unix_92621: true
+unix_92627: true
+unix_92629: true
+unix_92631: true
+unix_92635: true
+unix_92637: true
+unix_92639: true
+unix_92641: true
+unix_92643: true
+unix_92653: true
+unix_92655: true
+unix_92659: true
+unix_92661: true
+unix_92671: true
+unix_92675: true
+unix_92677: true
+unix_92679: true
+unix_92687: false
+unix_92695: true
+unix_92697: true
+unix_92699: true
+unix_92701: true
+unix_92705: true
+unix_92709: false
+unix_92711: true
+unix_92713: true
+unix_92715: true
+unix_92717: true
+unix_92719: true
+unix_92723: true
+unix_92727: true
+unix_92731: true
+unix_92741: true
+unix_92745: true
+unix_92749: true
+unix_92757: true
+unix_92759: true
+
+# CAT 3 Rules
+unix_92753: true
+
+# Please define the apache service user account and groups
+apache_service_user:
+    httpd: apache
+    apache2: www-data
+apache_service_group: root
+sys_admin_account: vagrant
+# Cat 1 variables
+
+# Cat 2 variables
+
+# This is for control V-92597
+# MaxKeepAliveRequests should be a value of 100 or more to conform to STIG standards
+maxkeepaliverequests_count: 100
+
+# This is for control V-92607
+# Set the path and format for the log files
+httpd_custom_log:
+    path: "logs/access_log"
+    format: combined
+apache2_custom_log:
+    path: "logs/access_log"
+    format: combined
+
+# This is for control V-92629
+# These set the user and group settings that will be used for the log file permissions
+# Only the adminstrators group, adminstrator and the user assigned to run the web server is granted permissions
+# read the log files
+logs_owner:
+    user: root
+    group: root
+    perms: '700'
+
+# This is for control V-92661
+# The listen IP is pulled from the default IP address. This can be overwritten here or via tower extra vars
+# The port here can be adjusted to fit your site needs
+listen_config:
+    ip: "{{ ansible_facts.default_ipv4.address }}"
+    port: 80
+
+# This is for control V-92677
+# The SessionMaxAge parameter shoudl be set to a value no larger than 600
+session_max_age: 600
+
+# This is for control V-92679
+# This is for the Heard edit Set-Cookie path variable. HttpOnly and Secure options are hard coded, so only the path is needed.
+apache_92679_cookie_path: ^(.*)$ $1
+
+# This is for control v-92699
+# These are the custom errors for 5XX and 4XX errors. Please modify to match your facility
+custom_error_messages:
+    - ErrorDocument 500 "Sorry, our script crashed. Oh dear"
+    - ErrorDocument 500 /cgi-bin/crash-recover
+    - ErrorDocument 500 http://error.example.com/server_error.html
+    - ErrorDocument 404 /errors/not_found.html
+    - ErrorDocument 401 /subscription/how_to_subscribe.html
+    - ''
+
+# This is for control V-92705
+# This will set the ReadRequestTimeout settings for the reqtimeout module (mod_reqtimeout.so)
+# Acceptable values are 5 minutes for high-value applications, 10 minutes for medium-value applications, and 20 minutes for low-value applications.
+requestreadtimeout_values:
+    httpd: header=20-40,MinRate=500 body=20,MinRate=500
+    apache2: body=10,minrate=500
+
+# This is for control V-92709
+# These are the Require all settings, if this control is needed.
+host_based_firewall: false
+requireall_settings: |
+    <RequireAll>
+        Require all granted
+        Require not ip 192.168.205
+        Require not host phishers.example.com
+    </RequireAll>
+
+# This is for control V-92709
+# This is for the templating of the httpd.conf file when template_configs is enabled
+require_all_list:
+    - Require not ip 192.168.205
+    - Require not host phishers.example.com
+
+# This is for control V-92741
+# This will be the value for the CookieNameSession parameter. httponly and secure are required to be in the string
+session_cookie_name_session_perms: session path=/private;domain=example.com;httponly;secure;
+
+# This is for control V-92745
+# This is the path and file for SSL CA Certs
+sslacertificatefile_settings:
+    pathrh: /etc/pki/tls/certs
+    pathub: /etc/apache2/ssl.crt
+    file: ca-bundle.crt
+# This is for control V-92749
+# This will update httpd to the latest available when the role is run, if there is a newer version
+automate_apache_version_update: true
+# Cat 3 variables
