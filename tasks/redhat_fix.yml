@@ -559,7 +559,7 @@
   replace:
       path: /etc/httpd/conf/httpd.conf
       regexp: '^Listen(.*?).*'
-      replace: 'Listen {{ listen_config.ip }}:{{ listen_config.port }}'
+      replace: 'Listen {{ apache_stig_listen_ip_port }}'
   notify: restart httpd
   when:
       - unix_92661

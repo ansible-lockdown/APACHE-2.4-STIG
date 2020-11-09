@@ -529,7 +529,7 @@
   replace:
       path: /etc/apache2/ports.conf
       regexp: '^Listen(.*?).*'
-      replace: 'Listen {{ listen_config.ip }}:{{ listen_config.port }}'
+      replace: 'Listen {{ apache_stig_listen_ip_port }}'
   notify: restart apache2
   when:
       - unix_92661
