@@ -967,6 +967,7 @@
             - "{{ apache_92757_htpasswd_loc.stdout_lines }}"
   when:
       - unix_92757
+      - not system_is_ec2
   tags:
       - V-92757
       - cat2
