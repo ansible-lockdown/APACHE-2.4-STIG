@@ -1051,6 +1051,7 @@
             mode: 755
   when:
       - unix_92731
+      - not system_is_ec2
   tags:
       - V-92731
       - cat2
