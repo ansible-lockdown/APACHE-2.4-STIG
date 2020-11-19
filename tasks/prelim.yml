@@ -5,7 +5,7 @@
         yum:
             name: httpd
             state: present
-        when: ansible_distribution == "RedHat"
+        when: ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
 
       - name: Install Apache
         apt:
@@ -17,7 +17,7 @@
         service:
             name: httpd
             state: started
-        when: ansible_distribution == "RedHat"
+        when: ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
 
       - name: Start Apache2
         service:
@@ -53,7 +53,7 @@
   yum:
       name: ['mod_session', 'mod_ssl', 'apr-util-openssl']
   when:
-      - ansible_distribution == "RedHat"
+      - ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
       - template_configs
 
 - name: Deploy RedHat config template_configs
@@ -67,7 +67,7 @@
       - { src: RedHat/01-session.j2, dest: /etc/httpd/conf.modules.d/10-session.conf }
       - { src: RedHat/ssl.j2, dest: /etc/httpd/conf.d/ssl.conf }
   when:
-      - ansible_distribution == "RedHat"
+      - ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
       - template_configs
 
 - name: Deploy RedHat config proxy h2
@@ -75,7 +75,7 @@
       src: RedHat/10-proxy_h2.j2
       dest: /etc/httpd/conf.modules.d/10-proxy_h2.conf
   when:
-      - ansible_distribution == "RedHat"
+      - ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
       - ansible_distribution_major_version == "8"
       - template_configs
 
