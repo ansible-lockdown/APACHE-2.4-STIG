@@ -52,6 +52,10 @@ automate_package_upgrades: true
 # with our base configuration files. 
 template_configs: false
 
+# This is used to skip tasks that fail on Amazon EC2 instances
+# system_is_ec2 set to false will run the tasks flagged, and set to true will skip the related tasks
+system_is_ec2: false
+
 # CAT 1 Rules
 unix_92645: true
 unix_92673: true
@@ -141,9 +145,10 @@ logs_owner:
 # This is for control V-92661
 # The listen IP is pulled from the default IP address. This can be overwritten here or via tower extra vars
 # The port here can be adjusted to fit your site needs
-listen_config:
-    ip: "{{ ansible_facts.default_ipv4.address }}"
-    port: 80
+# listen_config:
+#     ip: "{{ ansible_facts.default_ipv4.address }}"
+#     port: 80
+apache_stig_listen_ip_port: 80
 
 # This is for control V-92677
 # The SessionMaxAge parameter shoudl be set to a value no larger than 600

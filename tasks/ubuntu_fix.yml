@@ -529,7 +529,7 @@
   replace:
       path: /etc/apache2/ports.conf
       regexp: '^Listen(.*?).*'
-      replace: 'Listen {{ listen_config.ip }}:{{ listen_config.port }}'
+      replace: 'Listen {{ apache_stig_listen_ip_port }}'
   notify: restart apache2
   when:
       - unix_92661
@@ -561,6 +561,7 @@
       - cat2
       - medium
       - Ubuntu
+      - notimplemented
 
 - name: "MEDIUM | unix_92677 | The Apache web server must invalidate session identifiers upon hosted application user logout or other session termination"
   command: /bin/true
@@ -572,6 +573,7 @@
       - cat2
       - medium
       - Ubuntu
+      - notimplemented
 
 - name: "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application"
   block:
@@ -761,6 +763,7 @@
       - cat2
       - medium
       - Ubuntu
+      - notimplemented
 
 - name: "MEDIUM | unix_92711 | The Apache web server must be configured to immediately disconnect or disable remote access to the hosted applications"
   command: /bin/true
@@ -772,6 +775,7 @@
       - cat2
       - medium
       - Ubuntu
+      - notimplemented
 
 - name: "MEDIUM | unix_92713 | Non-privileged accounts on the hosting system must only access Apache web server security-relevant information and functions through a distinct administrative account"
   debug:
@@ -834,6 +838,7 @@
       - cat2
       - medium
       - Ubuntu
+      - notimplemented
 
 - name: |
         "MEDIUM | unix_92727 | The Apache web server must prohibit or restrict the use of nonsecure or unnecessary ports, protocols, modules, and/or services"
@@ -893,6 +898,7 @@
             mode: 0755
   when:
       - unix_92731
+      - not system_is_ec2
   tags:
       - V-92731
       - cat2
@@ -909,6 +915,7 @@
       - cat2
       - medium
       - Ubuntu
+      - notimplemented
 
 - name: "MEDIUM | unix_92749 | The Apache web server must install security-relevant software updates within the configured time period directed by an authoritative source (e.g., IAVM, CTOs, DTMs, and STIGs)"
   block:
@@ -967,6 +974,7 @@
             - "{{ apache_92757_htpasswd_loc.stdout_lines }}"
   when:
       - unix_92757
+      - not system_is_ec2
   tags:
       - V-92757
       - cat2
@@ -983,6 +991,7 @@
       - cat2
       - medium
       - Ubuntu
+      - notimplemented
 
 # CAT III Tasks
 # Control V-92753 is combined with V-92727 since they have the same remediation
