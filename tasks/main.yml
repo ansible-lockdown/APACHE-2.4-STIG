@@ -15,7 +15,7 @@
 - name: RedHat Fixes
   import_tasks: redhat_fix.yml
   when:
-      - ansible_distribution == 'RedHat'
+      - ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
   tags:
       - RedHat
 
