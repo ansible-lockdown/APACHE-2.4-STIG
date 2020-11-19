@@ -192,7 +192,7 @@
               "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Create path"
               "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Create path"
         file:
-            path: "{{ sslacertificatefile_settings.path }}"
+            path: "{{ sslacertificatefile_settings.pathrh }}"
             state: directory
         when: not apache_92601_sslacert_path_exist.stat == false
 
@@ -201,7 +201,7 @@
               "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Create SSLA Cert File"
         copy:
             src: 'files/{{ sslacertificatefile_settings.file }}'
-            dest: '{{ sslacertificatefile_settings.path }}/{{ sslacertificatefile_settings.file }}'
+            dest: '{{ sslacertificatefile_settings.pathrh }}/{{ sslacertificatefile_settings.file }}'
         when: not apache_92601_sslacert_path_exist.stat == false
 
       - name: |
@@ -218,7 +218,7 @@
       - name: |
               "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Get CA cert list"
               "MEDIUM | unix_92745 | The Apache web server must remove all export ciphers to protect the confidentiality and integrity of transmitted information | Get CA cert list"
-        command: cat {{ sslacertificatefile_settings.path }}/{{ sslacertificatefile_settings.file }}
+        command: cat {{ sslacertificatefile_settings.pathrh }}/{{ sslacertificatefile_settings.file }}
         changed_when: false
         failed_when: false
         register: apache_92745_ca_bundle_list
