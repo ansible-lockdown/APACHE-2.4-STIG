@@ -65,7 +65,7 @@ jobs:
           # Job ID
           job_id: 5f933cbcf9c74e86b1609c00
           # Variables
-          variables: '{ "gitrepo": "https://github.com/ansible-lockdown/APACHE-2.4-STIG.gitt", "image": "ami-0736e75ba7ca6b797", "githubBranch": "${{ github.head_ref }}", "username": "ubuntu" }'
+          variables: '{ "gitrepo": "https://github.com/ansible-lockdown/APACHE-2.4-STIG.git", "image": "ami-0736e75ba7ca6b797", "githubBranch": "${{ github.head_ref }}", "username": "ubuntu" }'
           # Refactr API base URL
           api_url: # optional
 
