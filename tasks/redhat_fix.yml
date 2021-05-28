@@ -194,7 +194,7 @@
         file:
             path: "{{ sslacertificatefile_settings.pathrh }}"
             state: directory
-        when: not apache_92601_sslacert_path_exist.stat == false
+        when: apache_92601_sslacert_path_exist.stat.exists
 
       - name: |
               "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Create SSLA Cert file"
@@ -202,7 +202,7 @@
         copy:
             src: 'files/{{ sslacertificatefile_settings.file }}'
             dest: '{{ sslacertificatefile_settings.pathrh }}/{{ sslacertificatefile_settings.file }}'
-        when: not apache_92601_sslacert_path_exist.stat == false
+        when: not apache_92601_sslacert_path_exist.stat.exists
 
       - name: |
               "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Set SSLCACertificateFile path"
@@ -213,7 +213,7 @@
             replace: 'SSLCACertificateFile {{ sslacertificatefile_settings.pathrh }}/{{ sslacertificatefile_settings.file }}'
         notify: restart httpd
         when:
-            - apache_92745_sslcacertifcatefile_path.rc == 0            
+            - apache_92745_sslcacertifcatefile_path.rc == 0
 
       - name: |
               "MEDIUM | unix_92601 | The Apache web server must use cryptography to protect the integrity of remote sessions | Get CA cert list"
@@ -280,7 +280,7 @@
       - RedHat
 
 - name: "MEDIUM | unix_92621 | An Apache web server, behind a load balancer or proxy server, must produce log records containing the client IP information as the source and destination and not the load balancer or proxy IP information with each event"
-  block:  
+  block:
       - name: "MEDIUM | unix_92621 | An Apache web server, behind a load balancer or proxy server, must produce log records containing the client IP information as the source and destination and not the load balancer or proxy IP information with each event | Get source IP settings"
         shell: cat /etc/httpd/conf/httpd.conf | grep LogFormat
         changed_when: false
@@ -608,7 +608,7 @@
       - medium
       - RedHat
 
-# The restart task is to force the httpd.pid file to show up. During testing I found intermittenly it was not created with the initial restart, this made it exist consistently. 
+# The restart task is to force the httpd.pid file to show up. During testing I found intermittenly it was not created with the initial restart, this made it exist consistently.
 - name: |
         "MEDIUM | unix_92679 | Cookies exchanged between the Apache web server and client, such as session cookies, must have security settings that disallow cookie access outside the originating Apache web server and hosted application"
         "MEDIUM | unix_92741 | Cookies exchanged between the Apache web server and the client, such as session cookies, must have cookie properties set to prohibit client-side scripts from reading the cookie data"
@@ -1042,13 +1042,13 @@
         file:
             path: "{{ apache_92731_httpd_pid_loc.stdout }}"
             owner: "{{ apache_service_user.httpd }}"
-            mode: 644
+            mode: 0644
 
       - name: "MEDIUM | unix_92731 | The Apache web server must be protected from being stopped by a non-privileged user | Set apachectl permissions"
         file:
             path: /usr/sbin/apachectl
             owner: "{{ apache_service_user.httpd }}"
-            mode: 755
+            mode: 0755
   when:
       - unix_92731
       - not system_is_ec2

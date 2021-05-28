@@ -49,7 +49,7 @@ automate_install: true
 automate_package_upgrades: true
 
 # This option is for new installs only. It will replace existing configuration files
-# with our base configuration files. 
+# with our base configuration files.
 template_configs: false
 
 # This is used to skip tasks that fail on Amazon EC2 instances

@@ -96,7 +96,7 @@
 
       - name: Enable Ubuntu Apache2 modules
         command: a2enmod {{ item }}
-        with_items: 
+        with_items:
             - unique_id
             - usertrack
             - session
@@ -106,4 +106,4 @@
             - reqtimeout
   when:
       - ansible_distribution == "Ubuntu"
-      - template_configs 
+      - template_configs

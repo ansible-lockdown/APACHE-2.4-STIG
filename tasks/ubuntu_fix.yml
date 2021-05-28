@@ -295,13 +295,13 @@
         file:
             path: '/etc/apache2/{{ apache2_log_path.stdout }}'
             state: directory
-        when: apache_92629_log_path_exist.stat.exists == false
+        when: not apache_92629_log_path_exist.stat.exists
 
       - name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users | Restart apache2 to create default log files"
         service:
             name: apache2
             state: restarted
-        when: apache_92629_log_path_exist.stat.exists == false
+        when: not apache_92629_log_path_exist.stat.exists
 
       - name: "MEDIUM | unix_92629 | The Apache web server log files must only be accessible by privileged users | Get list of log files"
         command: 'ls /etc/apache2/{{ apache2_log_path.stdout }}'
